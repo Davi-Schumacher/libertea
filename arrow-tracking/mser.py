@@ -29,6 +29,49 @@ class ShapeDetector:
 
         return shape, peri, approx
 
+def detect_orientation(arrow_approximation: np.ndarray) -> str:
+    """Checks the orientation of a pentagon approximation of an arrow
+
+    Args:
+        arrow_approximation (np.ndarray): A 5x2 numpy array giving the 5 x,y
+        coordinate pairs of the pentagon used to approximate an arrow.
+
+    Returns:
+        str: "U" if up, "D" if down, "L" if left, "R" if right, else "X"
+    """
+
+    # Make sure a 5x2 numpy array was given
+    assert isinstance(arrow_approximation, np.ndarray) and arrow_approximation.shape == (5, 2)
+    
+    # Calculate the medians and means of the x and y coordinates separately
+    med_X, med_Y = np.median(arrow_approximation[:, 0]), np.median(arrow_approximation[:, 1])
+    mean_X, mean_Y = np.mean(arrow_approximation[:, 0]), np.mean(arrow_approximation[:, 1])
+
+    # Calculate the difference between mean and median for both x's and y's
+    diff_X, diff_Y = mean_X - med_X, mean_Y - med_Y
+    
+    # A larger diff_X means the arrow is horizontal
+    if np.abs(diff_X) > np.abs(diff_Y):
+        
+        # Mean to right of median indicates more point mass on right, arrow points left
+        if diff_X > 0:
+            return "L"
+        # More point mass to the left, arrow points right
+        else:
+            return "R"
+    
+    # A larger diff_X means the arrow is horizontal
+    else:
+
+        # Same logic as above but think vertically
+        if diff_Y > 0:
+            return "U"
+        else:
+            return "D"
+
+    # Give a bad return if something above didn't work
+    return "X"
+
 
 ratio = 1.0
 
@@ -55,15 +98,7 @@ regions, _ = mser.detectRegions(thresh)
 
 hulls = [cv2.convexHull(p.reshape(-1, 1, 2)) for p in regions]
 
-# print(hulls[0])
-# sys.exit(0)
-
 cv2.polylines(vis, hulls, 1, (0, 255, 0))
-
-# cv2.imshow('img', vis)
-
-# cv2.waitKey(0)
-# sys.exit(0)
 
 shape_detector = ShapeDetector()
 
@@ -73,60 +108,33 @@ orientations, points = [], []
 for contour in hulls:
 
     shape, peri, approx = shape_detector.detect(contour)
-
+    
     if shape == "pentagon":
-        # peri = cv2.arcLength(contour, True)
         
         if peri > 41 and peri < 44:
-            # print(peri)
+
             reshaped = contour.reshape(contour.shape[0], contour.shape[2])
             mean_X, mean_Y = np.mean(reshaped[:, 0]), np.mean(reshaped[:, 1])
             
             # if mean_Y > 630 and mean_Y < 650 and mean_X > 750 and mean_X < 760:
             if mean_Y > 630 and mean_Y < 650:
 
-                # print(approx)
-                h, w = np.max(reshaped[:, 1]) - np.min(reshaped[:, 1]), np.max(reshaped[:, 0]) - np.min(reshaped[:, 0])
-                if h > w:
-                    orientations.append("V")
-                else:
-                    orientations.append("H")
+                orientation = detect_orientation(approx.reshape(approx.shape[0], approx.shape[2]))
+                orientations.append(orientation)
                 points.append((int(mean_X), int(mean_Y)))
                 cv2.drawContours(mask, [contour], -1, (255, 255, 255), -1)
 
-# print(means)
-# sys.exit(0)
 
-#this is used to find only text regions, remaining are ignored
-masked = cv2.bitwise_and(img, img, mask=mask)
-
-blurred = cv2.GaussianBlur(masked, (5, 5), 0)
-
-edges = cv2.Canny(blurred, 100, 200)
 for o, p in zip(orientations, points):
     cv2.putText(vis, o, p, cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
 cv2.imshow("orientations", vis)
 cv2.waitKey(0)
 
-# contours = cv2.findContours(edges.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-# contours = imutils.grab_contours(contours)
-
-# mask = np.zeros((img.shape[0], img.shape[1], 1), dtype=np.uint8)
-# for contour in contours:
-#     moments = cv2.moments(contour)
-
-#     if moments["m00"] == 0.0:
-#         continue
-
-#     contour_X = int((moments["m10"] / moments["m00"]) * ratio)
-#     contour_Y = int((moments["m01"] / moments["m00"]) * ratio)
-#     shape = shape_detector.detect(contour)
-
-#     if shape == "pentagon":
-#         cv2.drawContours(mask, [contour], -1, (255, 255, 255), -1)
-
+# #this is used to find only arrow regions, remaining are ignored
 # masked = cv2.bitwise_and(img, img, mask=mask)
 
-# cv2.imshow("masked", masked)
-# cv2.waitKey(0)
+# blurred = cv2.GaussianBlur(masked, (5, 5), 0)
+
+# edges = cv2.Canny(blurred, 100, 200)
+
